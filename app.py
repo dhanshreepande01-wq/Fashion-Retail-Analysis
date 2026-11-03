@@ -387,7 +387,7 @@ fig, ax = plt.subplots(figsize=(12, 7))
 
 sns.heatmap(
     a,
-    annot=True,
+    annot=False,
     fmt=".0f",
     cmap="YlGnBu",
     ax=ax
