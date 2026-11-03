@@ -102,10 +102,18 @@ col2.metric("Total Columns", data.shape[1])
 col3.metric("Duplicate Rows", data.duplicated().sum())
 
 st.subheader("Missing Values")
-st.dataframe(data.isnull().sum())
+
+missing = df.isnull().sum().reset_index()
+missing.columns = ['Column Name', 'Missing Values']
+
+st.dataframe(missing, use_container_width=True)
 
 st.subheader("Data Types")
-st.dataframe(data.dtypes.astype(str))
+
+data_types = df.dtypes.reset_index()
+data_types.columns = ['Column Name', 'Data Type']
+
+st.dataframe(data_types, use_container_width=True)
 
 st.subheader("Column Names")
 st.write(data.columns.tolist())
