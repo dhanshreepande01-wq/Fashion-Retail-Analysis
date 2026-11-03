@@ -19,7 +19,7 @@ st.write("Explore brands, categories, products, discounts and price segments.")
 uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 
 if uploaded_file is None:
-    st.info("Please upload your Petrol_Consumption.csv file.")
+    st.info("Please upload your Fashion Trends dataset.")
     st.stop()
 
 df = pd.read_csv(uploaded_file)
