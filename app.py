@@ -5,7 +5,10 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Page Configuration
+# --------------------------------------------------
+# PAGE CONFIGURATION
+# --------------------------------------------------
+
 st.set_page_config(
     page_title="Fashion Trends Analysis",
     page_icon="🛍️",
@@ -15,16 +18,29 @@ st.set_page_config(
 st.title("🛍️ Fashion Trends Analysis")
 st.write("Explore brands, categories, products, discounts and price segments.")
 
-# File Upload
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+# --------------------------------------------------
+# FILE UPLOAD
+# --------------------------------------------------
+
+uploaded_file = st.file_uploader(
+    "Upload your Fashion Trends dataset",
+    type=["csv"]
+)
 
 if uploaded_file is None:
     st.info("Please upload your Fashion Trends dataset.")
     st.stop()
 
-df = pd.read_csv(uploaded_file)
+try:
+    df = pd.read_csv(uploaded_file)
+except Exception as e:
+    st.error(f"Unable to read CSV file: {e}")
+    st.stop()
 
-# Check required columns
+# --------------------------------------------------
+# CHECK REQUIRED COLUMNS
+# --------------------------------------------------
+
 required_columns = [
     "Original_Price", "Discount_Percentage", "Brand",
     "Category", "Gender", "Discount_Price",
@@ -32,22 +48,46 @@ required_columns = [
     "Product_Name", "Discount_Tier", "Product_ID"
 ]
 
-missing = [col for col in required_columns if col not in df.columns]
+missing_columns = [
+    col for col in required_columns
+    if col not in df.columns
+]
 
-if missing:
-    st.error(f"Missing columns: {missing}")
+if missing_columns:
+    st.error(f"Missing columns: {missing_columns}")
     st.write("Available columns:", df.columns.tolist())
     st.stop()
 
-# Outlier Removal
+if df.empty:
+    st.error("The uploaded dataset is empty.")
+    st.stop()
+
+# --------------------------------------------------
+# DATA PREPARATION
+# --------------------------------------------------
+
+data = df.copy()
+
+numeric_columns = [
+    "Original_Price",
+    "Discount_Percentage",
+    "Discount_Price",
+    "Discounted_amount"
+]
+
+for col in numeric_columns:
+    data[col] = pd.to_numeric(data[col], errors="coerce")
+
+# --------------------------------------------------
+# SIDEBAR SETTINGS - OUTLIERS
+# --------------------------------------------------
+
 st.sidebar.header("Settings")
 
 remove_outliers = st.sidebar.checkbox(
     "Remove Outliers",
     value=False
 )
-
-data = df.copy()
 
 def remove_iqr(frame, column):
     q1 = frame[column].quantile(0.25)
@@ -58,20 +98,29 @@ def remove_iqr(frame, column):
     upper = q3 + 1.5 * iqr
 
     return frame[
-        (frame[column] >= lower) &
-        (frame[column] <= upper)
+        frame[column].isna() |
+        frame[column].between(lower, upper)
     ].copy()
 
 if remove_outliers:
     data = remove_iqr(data, "Discount_Price")
     data = remove_iqr(data, "Original_Price")
 
-# Helper Function
+# --------------------------------------------------
+# HELPER FUNCTIONS
+# --------------------------------------------------
+
 def show_plot(fig):
+    fig.tight_layout()
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
-def bar_chart(series, title, xlabel):
+
+def bar_chart(series, title, xlabel, ylabel="Count"):
+    if series.empty:
+        st.info("No data available for this chart.")
+        return
+
     fig, ax = plt.subplots(figsize=(10, 5))
 
     sns.barplot(
@@ -82,14 +131,30 @@ def bar_chart(series, title, xlabel):
 
     ax.set_title(title)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel("Count")
+    ax.set_ylabel(ylabel)
     ax.tick_params(axis="x", rotation=45)
 
-    fig.tight_layout()
     show_plot(fig)
 
 
+def show_boxplot(column):
+    values = data[column].dropna()
+
+    if values.empty:
+        st.info(f"No valid values available for {column}.")
+        return
+
+    fig, ax = plt.subplots(figsize=(9, 3))
+    sns.boxplot(x=values, ax=ax)
+    ax.set_title(f"Boxplot of {column}")
+
+    show_plot(fig)
+
+
+# --------------------------------------------------
 # 1. DATA PREPARATION
+# --------------------------------------------------
+
 st.header("1. Data Preparation")
 
 st.subheader("Dataset Preview")
@@ -104,14 +169,14 @@ col3.metric("Duplicate Rows", data.duplicated().sum())
 st.subheader("Missing Values")
 
 missing = df.isnull().sum().reset_index()
-missing.columns = ['Column Name', 'Missing Values']
+missing.columns = ["Column Name", "Missing Values"]
 
 st.dataframe(missing, use_container_width=True)
 
 st.subheader("Data Types")
 
-data_types = df.dtypes.reset_index()
-data_types.columns = ['Column Name', 'Data Type']
+data_types = data.dtypes.reset_index()
+data_types.columns = ["Column Name", "Data Type"]
 
 st.dataframe(data_types, use_container_width=True)
 
@@ -119,11 +184,14 @@ st.subheader("Column Names")
 st.write(data.columns.tolist())
 
 
+# --------------------------------------------------
 # 2. EXPLORATORY DATA ANALYSIS
+# --------------------------------------------------
+
 st.header("2. Exploratory Data Analysis")
 
 st.subheader("Descriptive Statistics")
-st.dataframe(data.describe(include="all"))
+st.dataframe(data.describe(include="all"), use_container_width=True)
 
 st.metric("Total Records", data.shape[0])
 
@@ -133,7 +201,12 @@ with col1:
     st.subheader("Original Price Distribution")
 
     fig, ax = plt.subplots()
-    sns.histplot(data=data, x="Original_Price", kde=True, ax=ax)
+    sns.histplot(
+        data=data,
+        x="Original_Price",
+        kde=True,
+        ax=ax
+    )
     ax.set_title("Original Price Distribution")
     show_plot(fig)
 
@@ -141,72 +214,86 @@ with col2:
     st.subheader("Discount Percentage Distribution")
 
     fig, ax = plt.subplots()
-    sns.histplot(data=data, x="Discount_Percentage", kde=True, ax=ax)
+    sns.histplot(
+        data=data,
+        x="Discount_Percentage",
+        kde=True,
+        ax=ax
+    )
     ax.set_title("Discount Percentage Distribution")
     show_plot(fig)
 
-# Top 10 Brands
 st.subheader("Top 10 Brands")
 
-b = data["Brand"].value_counts().nlargest(10)
-bar_chart(b, "Top 10 Brands", "Brand")
+brand_count = data["Brand"].value_counts().head(10)
+bar_chart(brand_count, "Top 10 Brands", "Brand")
 
-# Category
 st.subheader("Products by Category")
 
-c = data["Category"].value_counts()
-bar_chart(c, "Category Distribution", "Category")
+category_count = data["Category"].value_counts()
+bar_chart(category_count, "Category Distribution", "Category")
 
-# Gender
 st.subheader("Products by Gender")
 
-g = data["Gender"].value_counts()
-bar_chart(g, "Gender Distribution", "Gender")
+gender_count = data["Gender"].value_counts()
+bar_chart(gender_count, "Gender Distribution", "Gender")
 
 
-# OUTLIER ANALYSIS
+# --------------------------------------------------
+# 3. OUTLIER ANALYSIS
+# --------------------------------------------------
+
 st.header("3. Outlier Analysis")
 
-for col in [
+outlier_columns = [
     "Discount_Price",
     "Original_Price",
     "Discounted_amount",
     "Discount_Percentage"
-]:
-    fig, ax = plt.subplots(figsize=(9, 3))
-    sns.boxplot(data=data, x=col, ax=ax)
-    ax.set_title(f"Boxplot of {col}")
-    show_plot(fig)
+]
+
+for col in outlier_columns:
+    show_boxplot(col)
 
 st.subheader("IQR Calculation")
 
-p = st.selectbox(
+selected_column = st.selectbox(
     "Select Column",
-    ["Discount_Price", "Original_Price",
-     "Discounted_amount", "Discount_Percentage"]
+    outlier_columns
 )
 
-q1 = data[p].quantile(0.25)
-q3 = data[p].quantile(0.75)
-iqr = q3 - q1
+values = data[selected_column].dropna()
 
-c1 = q1 - 1.5 * iqr
-c2 = q3 + 1.5 * iqr
+if values.empty:
+    st.info("No valid numeric values available.")
+else:
+    q1 = values.quantile(0.25)
+    q3 = values.quantile(0.75)
+    iqr = q3 - q1
 
-outliers = data[(data[p] < c1) | (data[p] > c2)]
+    lower_limit = q1 - 1.5 * iqr
+    upper_limit = q3 + 1.5 * iqr
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Q1", round(q1, 2))
-col2.metric("Q3", round(q3, 2))
-col3.metric("IQR", round(iqr, 2))
+    outliers = values[
+        (values < lower_limit) |
+        (values > upper_limit)
+    ]
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Lower Limit", round(c1, 2))
-col2.metric("Upper Limit", round(c2, 2))
-col3.metric("Outliers", len(outliers))
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Q1", round(q1, 2))
+    col2.metric("Q3", round(q3, 2))
+    col3.metric("IQR", round(iqr, 2))
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Lower Limit", round(lower_limit, 2))
+    col2.metric("Upper Limit", round(upper_limit, 2))
+    col3.metric("Outliers", len(outliers))
 
 
+# --------------------------------------------------
 # 4. BRAND AND CATEGORY ANALYSIS
+# --------------------------------------------------
+
 st.header("4. Brand & Category Analysis")
 
 col1, col2 = st.columns(2)
@@ -214,7 +301,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("Top 10 Brands")
     st.dataframe(
-        data["Brand"].value_counts().nlargest(10)
+        data["Brand"].value_counts().head(10)
     )
 
 with col2:
@@ -225,39 +312,42 @@ with col2:
 
 st.subheader("Category vs Price Segment")
 
-u = data.groupby("Price_Segment")["Category"].size()
-st.dataframe(u)
-
 category_segment = pd.crosstab(
     data["Category"],
     data["Price_Segment"]
 )
 
-st.dataframe(category_segment)
+st.dataframe(category_segment, use_container_width=True)
 
 
+# --------------------------------------------------
 # 5. PRODUCT TYPE ANALYSIS
+# --------------------------------------------------
+
 st.header("5. Product Type Analysis")
 
 st.subheader("Top 10 Products")
 
 st.dataframe(
-    data["Product_Name"].value_counts().nlargest(10)
+    data["Product_Name"].value_counts().head(10)
 )
 
 st.subheader("Products by Gender")
 
-g = data.groupby("Gender")["Product_Name"].count()
+gender_products = data.groupby("Gender")["Product_Name"].count()
 
-bar_chart(g, "Products by Gender", "Gender")
+bar_chart(
+    gender_products,
+    "Products by Gender",
+    "Gender"
+)
 
 st.subheader("Top 10 Categories by Product Count")
 
 category_products = (
     data.groupby("Category")["Product_Name"]
     .count()
-    .sort_values(ascending=False)
-    .head(10)
+    .nlargest(10)
 )
 
 bar_chart(
@@ -267,14 +357,16 @@ bar_chart(
 )
 
 
+# --------------------------------------------------
 # 6. DISCOUNT ANALYSIS
+# --------------------------------------------------
+
 st.header("6. Discount Analysis")
 
 st.subheader("Products by Discount Tier")
 
-st.dataframe(
-    data.groupby("Discount_Tier").size()
-)
+discount_count = data["Discount_Tier"].value_counts()
+st.dataframe(discount_count)
 
 st.subheader("Average Discount by Product")
 
@@ -288,21 +380,26 @@ st.dataframe(avg_discount)
 
 st.subheader("Category vs Discount Tier")
 
-pi = pd.pivot_table(
-    data=data,
-    index="Category",
-    columns="Discount_Tier",
-    values="Product_ID",
-    aggfunc="count",
-    fill_value=0
+discount_table = pd.crosstab(
+    data["Category"],
+    data["Discount_Tier"]
 )
 
-st.dataframe(pi)
+st.dataframe(discount_table, use_container_width=True)
 
-fig, ax = plt.subplots(figsize=(10, 5))
-sns.heatmap(pi, annot=True, fmt=".0f", cmap="YlOrRd", ax=ax)
-ax.set_title("Category vs Discount Tier")
-show_plot(fig)
+if not discount_table.empty:
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    sns.heatmap(
+        discount_table,
+        annot=True,
+        fmt="d",
+        cmap="YlOrRd",
+        ax=ax
+    )
+
+    ax.set_title("Category vs Discount Tier")
+    show_plot(fig)
 
 st.subheader("Original Price vs Discount Percentage")
 
@@ -319,14 +416,20 @@ ax.set_title("Original Price vs Discount Percentage")
 show_plot(fig)
 
 
+# --------------------------------------------------
 # 7. GENDER-BASED PREFERENCES
+# --------------------------------------------------
+
 st.header("7. Gender-Based Preferences")
 
 st.subheader("Category Count by Gender")
 
-st.dataframe(
-    data.groupby("Gender")["Category"].count()
+gender_category = pd.crosstab(
+    data["Gender"],
+    data["Category"]
 )
+
+st.dataframe(gender_category, use_container_width=True)
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
@@ -339,12 +442,12 @@ sns.countplot(
 
 ax.set_title("Category Preferences by Gender")
 ax.tick_params(axis="x", rotation=45)
-fig.tight_layout()
 show_plot(fig)
 
 st.subheader("Average Discount by Gender")
 
 avg_gender = data.groupby("Gender")["Discount_Percentage"].mean()
+
 st.dataframe(avg_gender)
 
 fig, ax = plt.subplots(figsize=(8, 5))
@@ -360,28 +463,30 @@ ax.set_title("Discount Percentage by Gender")
 show_plot(fig)
 
 
+# --------------------------------------------------
 # 8. PRICE SEGMENT ANALYSIS
+# --------------------------------------------------
+
 st.header("8. Price Segment Analysis")
 
 st.subheader("Price Segment Count")
 
-st.dataframe(
-    data["Price_Segment"].value_counts()
-)
+price_count = data["Price_Segment"].value_counts()
+st.dataframe(price_count)
 
 st.subheader("Category vs Price Segment")
 
 price_table = pd.crosstab(
-    index=data["Category"],
-    columns=data["Price_Segment"],
+    data["Category"],
+    data["Price_Segment"],
     margins=True
 )
 
-st.dataframe(price_table)
+st.dataframe(price_table, use_container_width=True)
 
 st.subheader("Brand vs Price Segment")
 
-a = pd.pivot_table(
+brand_price = pd.pivot_table(
     data,
     index="Brand",
     columns="Price_Segment",
@@ -389,24 +494,26 @@ a = pd.pivot_table(
     aggfunc="mean"
 )
 
-st.dataframe(a)
+st.dataframe(brand_price, use_container_width=True)
 
-fig, ax = plt.subplots(figsize=(12, 7))
+if not brand_price.empty:
+    fig, ax = plt.subplots(figsize=(12, 7))
 
-sns.heatmap(
-    a,
-    annot=False,
-    fmt=".0f",
-    cmap="YlGnBu",
-    ax=ax
-)
+    sns.heatmap(
+        brand_price,
+        annot=False,
+        cmap="YlGnBu",
+        ax=ax
+    )
 
-ax.set_title("Average Original Price by Brand and Price Segment")
-fig.tight_layout()
-show_plot(fig)
+    ax.set_title("Average Original Price by Brand and Price Segment")
+    show_plot(fig)
 
 
+# --------------------------------------------------
 # FOOTER
+# --------------------------------------------------
+
 st.divider()
 
 st.success("Fashion Trends Analysis Completed!")
