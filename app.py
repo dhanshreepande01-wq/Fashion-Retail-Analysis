@@ -105,6 +105,9 @@ def remove_iqr(frame, column):
 if remove_outliers:
     data = remove_iqr(data, "Discount_Price")
     data = remove_iqr(data, "Original_Price")
+    data = remove_iqr(data, "Discounted_amount")
+    data = remove_iqr(data, "Discount_Percentage")
+
 
 # --------------------------------------------------
 # HELPER FUNCTIONS
