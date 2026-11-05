@@ -78,11 +78,10 @@ numeric_columns = [
 for col in numeric_columns:
     data[col] = pd.to_numeric(data[col], errors="coerce")
 
-# --------------------------------------------------
-# SIDEBAR SETTINGS - OUTLIERS
-# --------------------------------------------------
 
-st.sidebar.header("Settings")
+# -----------------------------------------------
+# OUTLIER REMOVAL USING IQR METHOD
+# -----------------------------------------------
 
 remove_outliers = st.sidebar.checkbox(
     "Remove Outliers",
@@ -90,65 +89,41 @@ remove_outliers = st.sidebar.checkbox(
 )
 
 def remove_iqr(frame, column):
+    # Convert column to numeric
+    frame[column] = pd.to_numeric(frame[column], errors="coerce")
+
+    # Calculate Q1 and Q3
     q1 = frame[column].quantile(0.25)
     q3 = frame[column].quantile(0.75)
+
+    # Calculate IQR
     iqr = q3 - q1
 
+    # Calculate lower and upper limits
     lower = q1 - 1.5 * iqr
     upper = q3 + 1.5 * iqr
 
+    # Remove outliers
     return frame[
         frame[column].isna() |
         frame[column].between(lower, upper)
     ].copy()
 
+
 if remove_outliers:
-    data = remove_iqr(data, "Discount_Price")
-    data = remove_iqr(data, "Original_Price")
 
-# --------------------------------------------------
-# HELPER FUNCTIONS
-# --------------------------------------------------
+    outlier_columns = [
+        "Original_Price",
+        "Discount_Percentage",
+        "Discount_Price",
+        "Discounted_amount"
+    ]
 
-def show_plot(fig):
-    fig.tight_layout()
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
-
-
-def bar_chart(series, title, xlabel, ylabel="Count"):
-    if series.empty:
-        st.info("No data available for this chart.")
-        return
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-
-    sns.barplot(
-        x=series.index.astype(str),
-        y=series.values,
-        ax=ax
-    )
-
-    ax.set_title(title)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.tick_params(axis="x", rotation=45)
-
-    show_plot(fig)
-
-
-def show_boxplot(column):
-    values = data[column].dropna()
-
-    if values.empty:
-        st.info(f"No valid values available for {column}.")
-        return
-
-    fig, ax = plt.subplots(figsize=(9, 3))
-    sns.boxplot(x=values, ax=ax)
-    ax.set_title(f"Boxplot of {column}")
-
-    show_plot(fig)
+    for col in outlier_columns:
+        if col in data.columns:
+            data = remove_iqr(data, col)
+        else:
+            st.warning(f"Column '{col}' not found in dataset.")
 
 
 # --------------------------------------------------
